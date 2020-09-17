@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xml:lang="es"><Esri><CreaDate>20200311</CreaDate><CreaTime>14072500</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><DataProperties><lineage><Process ToolSource="c:\program files (x86)\arcgis\desktop10.5\ArcToolbox\Toolboxes\Spatial Analyst Tools.tbx\ExtractMultiValuesToPoints" Date="20200310" Time="115652">ExtractMultiValuesToPoints puntos_presencia "elevacion.tif elevacio_1;orientacion.tif orientac_1;msavi.tif msavi_1;pendiente.tif pendient_1" NONE</Process></lineage></DataProperties></Esri></metadata>

@@ -1,0 +1,223 @@
+
+# Espacializando modelos de ocupación: `raster`, `rasterImage` y `unmarked`
+
+\footnotetext[1]{\textit{Mandujano, S. (Ed.). 2020 Fototrampeo en R: Análisis de ocupación y captura-recaptura. Volumen II. Instituto de Ecología A.C., Xalapa, Ver., México.}}
+
+### *Yolotli Morales Góngora* {-}
+
+## Introducción
+
+Uno de los procesos más estudiados en ecología es la distribución de las especies y para esto se han desarrollado múltiples modelos de distribución, los cuales se basan en los patrones para explorar la asociación entre la presencia de una especie y un conjunto de variables que permiten explicar el mecanismo por el cual una especie se distribuye de determinada forma (Araujo y Guisan 2006). Sin embargo, los modelos de distribución clásicos no incorporan la detección imperfecta, por lo que en años recientes se han propuesto nuevas aproximaciones como los modelos de ocupación. 
+
+Los modelos de ocupación emplean los patrones de detección y no detección en los sitios muestreados en múltiples ocasiones y permiten separar el proceso de muestreo (detección) del proceso ecológico (ocupación), lo que permite obtener estimaciones no sesgadas y determinar el efecto que tienen diversas variables en la distribución de una especie determinada (Kéry et al. 2010).
+
+De esta forma, los modelos de ocupación son una herramienta útil para el monitoreo de diversas especies (Molinari-Jobin et al. 2018) ya que nos permiten determinar relaciones entre la ocupación y las características del hábitat (MacKenzie y Nichols 2004) y son una herramienta útil para la conservación de la biodiversidad, ya que conocer cómo se distribuye una especie es esencial para establecer planes de conservación efectivos (Kéry et al. 2010). 
+
+Este capítulo tiene como objetivo ilustrar como podemos espacializar un modelo de ocupación de una especie-una temporada empleando Sistemas de Información Geográfica (SIG) en `R`. Es importante considerar que en el presente capítulo se analizan datos resultado de modelos de ocupación. 
+
+## Paquetes
+
+En este capítulo se emplearán los siguientes paquetes:
+
+```{r message=FALSE, warning=FALSE}
+library(raster)
+library(rasterImage)
+library(unmarked)
+```
+
+El paquete `raster` (Hijmans et al. 2012) permite leer, crear, manipular y analizar diversos datos espaciales. El paquete `rasterImage` (Seilmayer 2019) permite editar el color y los ejes de nuestros mapas. Mientras que el paquete `unmarked` se detalla en los siguientes capítulos.
+
+## Datos empleados para ejemplificar
+
+Para ejemplificar como podemos espacializar un modelo de ocupación emplearemos datos ficticios de 40 sitios con 3 eventos de detección, (Figura\ref{Figura1}) a partir de los cuales se elaboraron modelos de ocupación de una especie-una temporada para el pecarí de collar *Pecari tajacu* en un área de la reserva de Tehuacán-Cuicatlán (para conocer el procedimiento del modelado de la ocupación ver el capítulo modelos de ocupación).
+
+```{r Figura1, echo=FALSE, fig.align='center', out.width="90%", fig.cap= "Área de estudio. Los círculos representan los sitios muestreados donde se detectó (circulos negros) y no se detectó (círculos blancos) a la especie. La escala de colores muestra los valores de msavi, donde los tonos rojos corresponden a los valores más altos y los tonos azules a los más bajos.", message=FALSE, warning=FALSE}
+library(knitr)
+X1 <- include_graphics('Cap_yolo/mapa1.jpg', dpi=100)
+X1
+```
+
+Los nueve modelos de ocupación que se ajustaron fueron:
+
+```
+  fm1= p(día)psi(msavi+pendiente+orientacion)
+ 
+  fm2= p(.)psi(msavi+orientacion)
+ 
+  fm3= p(.)psi(msavi+pendiente)
+ 
+  fm4= p(.)psi(orientacion+pendiente)
+ 
+  fm5= p(.)psi(pendiente)
+ 
+  fm6= p(.)psi(pendiente)
+ 
+  fm7= p(.)psi(msavi)
+ 
+  fm8= p(.)psi(orientación)
+ 
+  fm9= p(.)psi(.)
+```
+
+De éstos, el mejor modelo fue el fm7`, el cual consider que la detección es constante y la ocupación está asociada con la covariable `msavi`, es decir:
+
+$$p(.)\psi(msavi)$$
+En este caso la covariable `msavi` hace referencia a un índie de verdor ajustado al suelo y será a partir del modelo `fm7 que se elaborará el mapa de distribución.
+
+## Preparación de los datos
+
+En este caso nuestro mejor modelo de ocupación contiene únicamente a la variable `msavi`, por lo que procedemos a cargar la capa "raster":
+
+```{r message=FALSE, warning=FALSE, linewidth=60, size="small"}
+MSAVI = raster("./msavi.tif")
+```
+
+Debido a que para la realización de los modelos de ocupación las variables empleadas fueron estandarizadas con media en cero y desviación estándar en 1, tenemos que realizar el mismo procedimiento para nuestras capas "rasters". Para esto, necesitamos obtener los valores de la media y la desviación estándar de las covariables empleadas para ajustar los modelos.
+
+En este caso hemos guardado los valores de la variable estandarizada en un archivo de tipo `.RDATA` llamado `msavi_sd`, este tipo de archivos sirve para almacenar objetos en R y es útil cuando solo se requiere cierta información, de esta forma no necesitamos correr todo el código. En el caso de tener los modelos de ocupación en el mismo código donde se realizarán los mapas no es necesario crear el archivo `.RDATA`.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+load("msavi_sd.RData")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+attr(msavi, "scaled:center")
+attr(msavi, "scaled:scale")
+```
+
+Una vez obtenidos estos valores podemos estandarizar nuestro raster aplicando la siguiente formula:
+
+$$ Variable\:estandarizada = (variable- media)/sd $$
+
+donde la variable es la capa raster que queremos estandarizar, la media es el valor empleado para estandarizar la variable en media 0 (scaled:center) y sd es el valor empleado para estandarizar la variable en desviación estándar en 1 (scaled:scale`). 
+
+```{r}
+MSAVI_e <- (MSAVI - 0.45) / 0.20
+```
+
+Este paso lo realizamos con todas las variables que queremos estandarizar y una vez que nuestras capas raster están listas ya podemos proceder a espacializar nuestros modelos.
+
+## Espacialización de los modelos
+
+Para crear el mapa de distribución de nuestra especie podemos realizarlo de dos formas. La primera es empleando la función `predict` con la cual obtenemos el mapa con la predicción de ocupación, el error estándar del modelo y los intervalos de confianza al 95% del modelo. Sin embargo, este procedimiento es computacionalmente demandante y la obtención de dichos mapas puede demorar horas, especialmente si se trata de una gran extensión de terreno. Por lo que, si únicamente estamos interesados en obtener el mapa de distribución podemos simplemente especificar el valor de nuestros parámetros en el modelo lineal. A continuación se muestran ambos procedimientos.
+
+### Método 1: Mapa con las predicciones de ocupación
+
+En este caso se ha guardado la informacion del modelo `fm7` en un archivo `.RDATA. 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+load("modelo_fm7.RData")
+```
+
+Lo primero que tenemos que hacer es obtener los valores de los coeficientes $\beta$, para esto aplicamos la siguiente función:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+(betas <- coef(fm7, type = "state"))
+```
+
+En este caso `fm7` es el mejor modelo de ocupación a partir del cual se harán las predicciones y el argumento `state` hace referencia a la ocupación. Estos valores serán utilizados en la siguiente ecuación:
+
+$$logit.psi= \beta_1 + \beta_2*variable + \beta_3*variable$$
+
+Donde $\beta_1$ es el intercepto del modelo, $\beta_2$ es el parámetro $\beta$ de nuestra variable de interés y variable es la covariable del modelo empleada para modelar la ocupación. En este caso solo tenemos la $\beta_1$ del intercepto y la $\beta_2$ del msavi.
+
+Ahora procedemos a especificar los valores obtenidos en nuestro modelo.
+
+```{r}
+logit.psi <- -2.351697 + 5.503494 * MSAVI_e
+```
+
+Dado que la predicción está dada en escala `logit tenemos que convertirla para obtener los valores reales de ocupación, para esto aplicamos la siguiente ecuación:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+psi <- exp(logit.psi) / (1 + exp(logit.psi))
+```
+
+Finalmente obtenemos el mapa de predicción de la probabilidad de ocupación (Figura\ref{Figura2}) se agregan los 40 sitios de muestreo. Para este fin se carga la librería `rasterImage` la cual nos permite usar diferentes paletas de colores: 
+
+```{r Figura2, message=FALSE, warning=FALSE, fig.align='center', fig.cap="Mapa de predicción de la probabilidad de ocupación del pecarí de collar en el área de estudio.", out.width="95%"}
+
+# Capa de puntos con la función shapefile
+shp <- shapefile("./puntos_deteccion.shp")
+
+# Paleta de colores para el mapa
+cols <- colorPalette(n = 100, type = "spectral",
+                     inv = F)
+
+# Objeto con puntos para poner añadirlos al mapa
+mispuntos = list("sp.points", shp, pch = 19,
+                 col="black")
+
+# Grafica
+spplot(psi, col.regions = cols, 
+       sp.layout = list(mispuntos))
+```
+
+### Método 2: Mapa con predicciones de error estándar e intervalos de confianza
+
+Para este método emplearemos la función `predict`. Dicha función requiere de un objeto de tipo `RasterStack`, este objeto se crea con la función `stack` y lo que hace dicha función es agrupar varias capas raster con la misma extensión y resolución. Es necesario aclarar que se debe de crear este stack aún y cuando trabajemos con una única variable. Para ello realizamos lo siguiente.
+
+Primero cargamos todas las capas "raster" que utilizaremos, las cuales ya deben estar estandarizadas.
+
+```{r message=FALSE, warning=FALSE, linewidth=60, size="small"}
+MSAVI_e
+```
+
+Luego creamos el objeto `RasterStack` empleando la función `stack`:
+
+```{r}
+stackCapas = stack(MSAVI_e)
+```
+
+Una vez que todas nuestras capas están en un solo objeto, procedemos a calcular los valores de ocupación de nuestros mapas utilizando la función `predict`:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, eval=FALSE, paged.print=TRUE}
+E.psi <- predict(fm7, type = "state", newdata=stackCapas)
+```
+
+Donde `fm7` hace referencia al modelo de ocupación que estamos empleando para la predicción y el newdata es el objeto en donde agrupamos nuestras capas raster.
+
+Una vez obtenidos los valores procedemos a crear nuestros mapas:
+
+```{r plot, echo=TRUE, message=FALSE, warning=FALSE, eval=FALSE, paged.print=TRUE}
+cols <- colorPalette(n = 100, type = "jet.colors", 
+                     inv = F)
+plot(E.psi, axes = FALSE, col = cols)
+```
+
+```{r Resultados, echo=FALSE, fig.align='center', fig.cap= "Mapa de distribución para Pecari tajacu (predicción), error estándar del modelo (EE) e intervalos de confianza inferior y superior al 95\\%", message=FALSE, warning=FALSE, out.width="100%"}
+X1 <- include_graphics('Cap_yolo/mapa2.jpg', dpi=100)
+X1
+```
+
+Finalmente podemos exportar nuestros mapas:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, eval=FALSE}
+lapply(names(E.psi), function(x){writeRaster(E.psi[[x]],                        paste0("mod_ocupacion", x,".tif"),
+        overwrite = TRUE)})
+```
+
+## Consideraciones para la elaboración de los mapas
+
+Para que nuestro procedimiento sea exitoso tenemos que tener en cuenta lo siguiente:
+
+ 1. El valor del pixel de nuestra capa `raster` y el nombre que nosotros establecemos en el modelo debe ser el mismo. Por ejemplo en este caso la covariable de ocupación era `msavi` y la capa raster original se llamaba de la misma manera. 
+
+ 2. La extensión y resolución de nuestros rasters debe ser la misma, de otra manera al aplicar la función `stack` nos marcará un error. Una manera de solucionarlo es usando la función `resample`.
+
+ 3. El paquete `raster` no permite crear mapas con las predicciones de ocupación a partir de modelos con variables categóricas. Una de las opciones es crear previamente variables `dummy` y rasterizarlas.
+
+ 4. Debido a que se requiere de muchas horas para el computo de la probabilidad de ocupación, intervalos de confianza y error estándar, una de nuestras mejores opciones es dividir nuestra área de interés en pequeñas extensiones y realizar el método dos para cada una de estas, y finalmente usar una herramienta que nos permita unir todos los raster. 
+ 
+## Sumario
+
+En este capítulo se ha descrito como podemos espacializar un modelo de ocupación de una especie-una temporada con variables continuas a través de dos métodos, empleando la paquetería `Raster`. El primer método muestra cómo obtener el mapa de distribución, mientras que con el segundo método además del mapa de distribución, podemos obtener el error estándar del modelo y los intervalos de confianza. La elección de cual método usar dependerá de los objetivos del lector. Los procedimientos propuestos en este capítulo son la base para poder desarrollar modelos más complejos que incluyan por ejemplo, el uso de variables categóricas o modelos de ocupación multi-temporada.
+
+## Referencias
+
+- Araujo, M.B., and A. Guisan. 2006. “Five (or so) Challenges for Species Distribution Modelling.” Journal of Biogeography 33 (10). Wiley Online Library: 1677–88.
+- Hijmans, RJ, J van Etten, M Mattiuzzi, M Sumner, JA Greenberg, O Perpinan Lamigueiro, A Bevan, EB Racine, and A Shortridge. 2012. “Raster: Geographic Analysis and Modeling with Raster Data. R Package Version 3.0-12.”
+- Kéry, M., B. Gardner, and C. Monnerat. 2010. “Predicting Species Distributions from Checklist Data Using Site-Occupancy Models.” Journal of Biogeography 37 (10). Wiley Online Library: 1851–62.
+- MacKenzie, D. I., and J. D. Nichols. 2004. “Occupancy as a Surrogate for Abundance Estimation.” Animal Biodiversity and Conservation 27 (1): 461–67.
+- Molinari-Jobin, A., M. Kéry, E. Marboutin, F. Marucco, F. Zimmermann, P. Molinari, H. Frick, et al. 2018. “Mapping Range Dynamics from Opportunistic Data: Spatiotemporal Modelling of the Lynx Distribution in the Alps over 21 Years.” Animal Conservation 21 (2). Wiley Online Library: 168–80.
+- Seilmayer, Martin. 2019. “RasterImage: An Improved Wrapper of Image. R Package Version 0.4.0.”
