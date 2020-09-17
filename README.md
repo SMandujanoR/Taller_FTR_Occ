@@ -1,5 +1,7 @@
 # Taller Fototrampeo R: Modelos de Ocupación
 
+<img align="rigth" src="banner.png" alt="drawing" width="500"/>
+
 Códigos R y datos para ejecutar los ejercicios durante el taller.
 
 Cada carpeta corresponde a un proyecto RStudio listo para ejecutarse desde la camputadora personal.
