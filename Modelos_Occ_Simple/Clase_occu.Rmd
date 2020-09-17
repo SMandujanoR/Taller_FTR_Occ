@@ -1,0 +1,237 @@
+---
+title: "Modelos de ocupación una temporada/una especie"
+author: "Karen Velásquez"
+output:
+  prettydoc::html_pretty:
+    theme: hpstr
+  citation_package: natbib
+  
+
+
+---
+
+## Librerías
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+library(vegan)
+library(corrplot)
+library(usdm)
+library(unmarked)
+library(MuMIn)
+library(AICcmodavg)
+library(ggplot2)
+```
+
+## Covariables
+
+Cargamos la base de datos con la información de las variables, eliminando la columna de sitio o cámara.
+
+```{r, message=FALSE, warning=FALSE}
+covar <- read.csv("CovariablesOcc.csv", sep=",")
+cov.site <- covar[,-1]
+cov.site$CAM <- as.factor(cov.site$CAM)
+```
+
+Extraemos las variables numéricas y se estandarizan mediante la función `decostand`, incluyendo el objeto con la información de las variables y el método, para este caso `standardize`. A continuación extraemos las covariables categóricas como un factor.
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+cov.num<-cov.site[,sapply(cov.site,is.numeric)]
+cov.std<-decostand(cov.num,method="standardize")
+CAM<-cov.site[,sapply(cov.site,is.factor)]
+```
+
+
+Al tener nuestras variables estandarizadas, emplearemos la librería `corrplot` [@wei2017package]  para visualizar la posible correlación entre variables (Figura \ref{Figura 1}) y la librería `usdm` [@naimi2015package] para hallar el factor de inflación de varianza (VIF), con el cual identificaremos las variables que presentan correlación y deben ser excluidas del análisis o deben incluirse en modelos diferentes.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, fig.height=5, fig.width=5, fig.align='center', fig.cap="Correlación de las variables seleccionadas. \\label{Figura 1}"}
+cormat <- cor(cov.std)
+corrplot(cormat, method = c("circle"), type = "upper", outline = T, tl.col = "black", tl.cex = 0.8, tl.srt = 45,  mar = c(2,0,1,1.5), title = "Matriz de correlación")
+usdm::vif(cov.std)
+no_corr <- vifstep(cov.std, th=4) 
+no_corr
+```
+
+Para le selección de variables se determina un umbral para el valor de VIF, es decir aquellas variables con valor de VIF mayor al umbral seleccionado se descartaran del análisis. Existen diversas aproximaciones acerca de la selección del umbral VIF, por lo que pueden consultar [@zuur2009mixed, @robinson2009interaction]. En nuestro caso emplearemos un valor de 4 como umbral de selección.
+Finalmente uniremos las variables numéricas seleccionadas con las variables categóricas en un único marco de datos que llamaremos `covs`.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+covs<-data.frame(CAM, cov.std)
+```
+
+## Construcción de los modelos
+
+Para la construcción de los modelos iniciaremos cargando la librería `unmarked` @fiske_unmarked:_2011.
+
+Para generar el marco de datos a emplear en los modelos se debe cargar la base de datos correspondiente a las historias de detección de la especie de interés. En este caso se trabajará con registros de la zorra gris *Urocyon cinereoargenteus* obtenidos a partir de información de foto trampeo en la localidad de San Gabriel Casa Blanca, Oaxaca. 
+
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+
+Urci <- read.csv("DetHist_UrciClase.csv", sep=",")
+Urcihist <- Urci[,-1]
+UmUr <- unmarkedFrameOccu(y=Urcihist, 
+                          siteCovs=covs, 
+                          obsCovs= NULL)
+summary(UmUr)
+str(UmUr)
+```
+
+### Proceso observacional
+
+```{r, message=FALSE, warning=FALSE}
+summary(fmUr1 <- occu(~1~1, start = c(1,1), data=UmUr))
+```
+
+El modelo nulo representa la interpretación más sencilla tanto del proceso ecológico como observacional, en la que estos no están siendo afectados por ningún factor externo.
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+summary(fmUr2 <- occu(~CAM~1, data=UmUr))
+summary(fmUr3 <- occu(~CVERT~1, data=UmUr))
+```
+
+Al finalizar la computación de los modelos los organizaremos mediante la función `fitlist`, permitiéndonos así evaluar el mejor modelo usando la función `modSel`. Seleccionaremos el mejor modelo que represente la probabilidad de detección mediante el criterio de información de Akaike (AIC), seleccionando así el modelo con menor valor de AIC.
+
+```{r, message=FALSE, warning=FALSE}
+fms <- fitList ("p(.)psi(.)"            = fmUr1,
+                "p(CAM)psi(.)"          = fmUr2,
+                "p(CVERT)psi(.)"        = fmUr3)
+(ms <- modSel(fms))
+```
+
+### Proceso ecológico
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+summary(fmUr4  <- occu(~CAM~ DBEB, data=UmUr))
+summary(fmUr5  <- occu(~CAM~ DCUL, data=UmUr))
+summary(fmUr6 <- occu(~CAM~ DPOB, data=UmUr))
+summary(fmUr7 <- occu(~CAM~ CVERT, data=UmUr))
+```
+
+Al igual que en los modelos construidos para la detección, organizamos en una lista los modelos y con la función `modSel` obtenemos los datos organizados de los modelos según el valor de AIC. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+fms <- fitList ("p(CAM)psi(DBEB)"                = fmUr4,
+                "p(CAM)psi(DCUL)"                = fmUr5,
+                "p(CAM)psi(DPOB)"                = fmUr6,
+                "p(CAM)psi(CVERT)"               = fmUr7
+                )
+
+(ms <- modSel(fms))
+```
+
+Con el fin de obtener el valor de probabilidad de detección y ocupación real de la especie, realizamos una transformación de los valores estimados obtenidos mediante la función `backTransform`
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+backTransform(linearComb(fmUr5, coefficients=c(1,0), type="state"))
+backTransform(linearComb(fmUr5, coefficients=c(1,0,0), type="det"))
+
+```
+
+
+### Importancia de las covariables 
+
+- Intervalos de confianza modelo fmUr5
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+confint(fmUr5, type="state")
+confint(fmUr5, type="det")
+```
+
+
+### Prueba de bondad de ajuste
+
+En algunos casos el o los mejores modelos no siempre son un "buen" modelo, esto quiere decir que no nos ayuda a explicar lo que realmente esta pasando. Para saber si un modelo es bueno, el siguiente paso es aplicar una prueba de bondad de ajuste. En este caso aplicaremos la prueba desarrollada por @mackenzie2004assessing con el fin de identificar si nuestro modelo se ajusta de manera adecuada. Para la realización de la prueba es necesario cargar la librería `AICcmodavg`, y se emplea la función `mb.gof.test` como se ejemplifica a continuación:
+
+
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+mb_Urci5clase <- mb.gof.test(fmUr5, nsim = 500, plot.hist = TRUE)
+```
+
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+save(mb_Urci5clase, file="mb_UrciClase.RData")
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+load("mb_UrciClase.RData")
+```
+
+Resultado fmUr5
+
+```
+$p.value
+[1] 0
+
+$c.hat.est
+[1] 355.946
+
+$nsim
+[1] 200
+
+attr(,"class")
+[1] "mb.chisq"
+
+```
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+mb_Urci5
+```
+
+```{r , Figura 1, echo=TRUE, fig.align='center', fig.cap="Histograma correspondiente a la prueba de bondan de ajuste . \\label{Figura 2}", fig.height=5, fig.width=6, message=FALSE, warning=FALSE, paged.print=FALSE}
+par(mar = c(6.50,
+            5.00,
+            6.50,
+            3.00))
+hist(mb_Urci5$t.star, xlab=expression(paste("Xi"^"2")), ylab="Frecuencia", col="lightgrey",
+     font.lab=2, cex.lab=0.9, main="Prueba bondad de ajuste modelo Ocupación") 
+abline(v=mb_Urci5$chi.square, lty=2, lwd=3, col="red")
+```
+
+
+Como resultado de la prueba tenemos dos parámetros informativos:
+
+1. El resultado de la prueba Xi2 de nuestro estimador y el  remuestreo. Si la prueba presenta un *p*-valor <0.05 quiere decir que el modelo no se ajusta de manera adecuada.
+
+2. El c-hat es un parámetro que nos informa sobre la dispersión del modelo, cuando un modelo esta bien ajustado el c-hat es igual a 1, en caso de tener sobre dispersión  el valor será >1 y subdispersión cuando sea <1.
+
+En nuestro caso, el modelo no se ajusta de manera adecuada (Figura 1\ref{fig:Figura 1}), y presenta un alto nivel de sobredispersión. Esto puede deberse a diferentes factores; ya sea que las covariables que medimos no sean las adecuadas o que nuestra cantidad de registros sea baja en comparación con los ceros.
+
+### Visualización de resultados 
+
+La mejor alternativa para la visualización de las predicciones tanto de la probabilidad de detección como de ocupación es mediante gráficos, ya que nos permite ver como se comporta la detección y la ocupación a partir de las variables incorporadas. 
+
+Para la realización de los gráficos cargaremos la paquetería `ggplot2`: 
+
+La generación de los gráficos de predicción se obtienen a partir del siguiente código:
+
+
+```{r Figura 2, echo=TRUE, fig.align='center', fig.cap="Relación entre la probabilidad de detección y el tipo de cámara . \\label{Figura 2}", fig.height=3, fig.width=5, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+newData <- data.frame(CAM=c("Moultrie","MoultrieA30","Primos"))
+statepredict <-predict(fmUr5, type="det", newdata=newData, appendData=TRUE)
+CAMplot <- ggplot(statepredict,aes(x=CAM,y=Predicted))+ylim(0,1)+
+  labs(x="Cámara",y="p")+
+  geom_point(data = statepredict)+
+  geom_errorbar(data = statepredict,aes(ymin=lower,ymax=upper),alpha=0.8, width=0.25, colour="black")+
+  theme_classic()
+CAMplot
+```
+
+En el caso de la detección podemos observar que en la (Figura 2 \ref{fig:Figura 2}) que la marca y modelos de las cámaras influye sobre la detección de la especie, en particular el modelo de Moultrie A30 parece tener un mejor desempeño.
+
+
+```{r Figura 3, echo=FALSE, fig.align='center', fig.cap="Relación entre a probabilidad de ocupación y la distancia a cultivos para el modelo fmUr6. \\label{Figura 4}", fig.height=3, fig.width=5, message=FALSE, warning=FALSE}
+DCUL<-data.frame(DCUL=seq(min(covs$DCUL),max(covs$DCUL),length=100)) 
+PredDCUL <-predict(fmUr5,type="state",newdata=DCUL,appendData=TRUE) 
+DCULplot <- ggplot(PredDCUL,aes(x=DCUL,y=Predicted))+ylim(0,1)+
+  labs(x="Distancia a cultivos",y=expression(psi))+geom_ribbon(data = PredDCUL,aes(ymin=lower,ymax=upper),alpha=0.8, fill = "#cfe0e3")+
+  geom_line(data = PredDCUL, colour="#2aa3bb", size=1.2)+
+  theme_classic()
+DCULplot
+```
+
+
+Por otra parte la probabilidad de ocupación de la especie se vio afectada por la variable de paisaje distancia a cultivos (DCUL) (Figura 3\ref{fig:Figura 3}). No obstante, no se puede definir si el efecto es de todo negativo, pues sus intervalos de confianza solapan el cero. Como se observa en las gráfica, la variable distancia a cultivos afectaría de forma negativa la ocupación de la especie. 
+
+
+# Bibliografía
