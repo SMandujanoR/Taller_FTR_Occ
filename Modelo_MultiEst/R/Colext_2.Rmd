@@ -1,0 +1,44 @@
+---
+title: "Colext_2"
+author: "Diego J. Lizcano"
+date: "16/7/2020"
+output:
+  html_document:
+    theme: flatly
+    highlight: pygments
+    code_folding: hide
+    df_print: paged
+    social: [ "twitter", "facebook" ]
+    fig_caption: true
+    toc: true
+    toc_float: true
+    smooth_scroll: true
+link-citations: yes
+toc: yes
+license: CC
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Modelo de Ocupación Dinámico
+## Con datos del mundo real
+
+Este analisis es un tutorial del modelo de ocupación dinámico y usa parte de los datos y el analisis que forman parte del articulo: 
+
+[Ahumada JA, Hurtado J, Lizcano D. 2013. Monitoring the Status and Trends of Tropical Forest Terrestrial Vertebrate Communities from Camera Trap Data: A Tool for Conservation. PLoS ONE. 8:e73707. doi:DOI: 10.1371/journal.pone.0073707.](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0073707)
+
+Utilizamos datos de trampa de cámara que la Red de Tropical Ecology Assessment and Monitoring (TEAM) recolectados de forma regular a lo largo de un transecto del Volcán Barva en Costa Rica.
+
+Mostramos cómo estos datos pueden usarse para calcular los indicadores temporales de las especies de mamíferos de interés en el área. 
+
+Se encontraron descensos en la ocupación de algunas especies.
+
+Para este tutorial nos enfocaremos en _Dasiprocta punctata_
+
+
+
+
+

@@ -1,0 +1,153 @@
+---
+output:
+  knitrBootstrap::bootstrap_document:
+    title: "Modelo de Ocupacion Dinamico"
+    theme: United
+    highlight: tomorrow night blue
+    theme.chooser: FALSE
+    highlight.chooser: FALSE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval=TRUE, echo = TRUE, warning = FALSE, message = FALSE, cache = TRUE, results = "hold", results='asis')
+library(markdown)
+library(knitrBootstrap)
+
+# debajo de link citation
+# csl: C:/Users/diego.lizcano/Box Sync/CodigoR/Biodiv_Caqueta/bib/ecology.csl
+# bibliography: C:/Users/diego.lizcano/Box Sync/CodigoR/Biodiv_Caqueta/bib/refrences.bib
+```
+
+
+# Modelo de Ocupación Dinámico
+## Diego J. Lizcano
+
+Este documento contiene un ejemplo del modelo de ocupación de una sola especie y varias temporadas. Este modelo fue descrito por MacKenzie et. al (2003) en: 
+
+> MacKenzie, D. I., J. D. Nichols, J. E. Hines, M. G. Knutson, and A. B. Franklin. 2003. Estimating site occupancy, colonization, and local extinction when a species is detected imperfectly. Ecology 84:2200–2207.
+
+
+![image](C:/Users/usuario/Desktop/Curso_Salvador_Multi_Season/img/fig1.jpg)
+
+## Parámetros Adicionales
+
+Este modelo incluye dos parámetros adicionales que representan la colonización y extinción de cada sitio. Estos dos parámetros adicionales pueden ser modelados con covariables que varían año a año. 
+
+Antes de entrar en materia con el modelo dinámico vale la pena que revisemos el modelo básico de ocupación. 
+
+## Recordemos el Modelo estático
+
+Recordemos que el modelo básico de ocupación de MacKenzie et. al (2002), también es conocido como el modelo estático de ocupación. Este modelo se aplica a una sola especie, y por lo general en una sola temporada.
+
+
+
+![image](C:/Users/usuario/Desktop/Curso_Salvador_Multi_Season/img/Occu_Bayes.png)
+
+
+Donde  
+ψ
+  es la ocupación y p la probabilidad de detección. Con  
+β
+  como el coeficiente de la regresión para las co-variables de la ocupación y  
+α
+  el coeficiente de regresión para las co-variables de la detección.
+
+
+
+Si desean conocer en detalle el modelo estático y saber más del poder y potencial de las simulaciones en ecología, les recomiendo seguir el  [Tutorial Ubicado en este enlace](https://dlizcano.github.io/IntroOccuBook/example.html).
+
+
+## Recordemos la forma de la distribución Bernoulli!
+
+La distribución de Bernoulli (o distribución dicotómica), nombrada así por el matemático suizo Jacob Bernoulli (1655-1705).
+
+![image](C:/Users/usuario/Desktop/Curso_Salvador_Multi_Season/img/jacob_bernoulli.jpg)
+
+Esta es una distribución de probabilidad discreta, que toma valor 1 para la probabilidad de éxito (p) y valor 0 para la probabilidad de fracaso (q=1-p).
+
+La distribución de Bernoulli es un caso particular de la distribución binomial, pero con solo dos posibles resultados (éxito o fracaso) unos y ceros. 
+
+
+> El proceso Bernoulli es el más simple proceso aleatorio que existe! Imagínemelo como algo tan sencillo como una secuencia de lanzamientos de una moneda. Donde un solo lanzamiento es un "trial" y muchos lanzamientos componen el proceso.
+ 
+
+Usemos el siguiente código ejecutándolo varias veces y cambiando los parámetros para entender su efecto en el resultado.
+
+
+```{r fig.width=6, fig.height=6, fig.align='center'}
+
+library(ggplot2)
+ni<-10 # numero de datos
+pi<- 0.5 # probabilidad (~proporcion de unos)
+# Generemos datos con esa informacion 
+daber<-data.frame(estimado=rbinom(ni, 1, pi)) 
+# Grafiquemos 
+library(ggplot2)
+ggplot(daber, aes(x=estimado)) + 
+    geom_histogram(aes(y=..density..), # Histograma y densidad 
+                   binwidth=.1, # Ancho del bin
+                   colour="black", fill="white") + 
+        geom_vline(aes(xintercept=mean(estimado, na.rm=T)), 
+          color="blue", linetype="dashed", size=1) # media en azul
+```
+
+Si desean conocer más detalles de la distribución Bernoulli les recomiendo la muy buena explicación de [jbstatistics](https://www.youtube.com/watch?v=bT1p5tJwn_0)
+
+Y si quieren aún más detalles visiten la clase del profesor [Tsitsiklis](https://www.youtube.com/watch?v=gMTiAeE0NCw) del MIT.
+
+
+
+## Los Parámetros de los modelos
+
+### Modelo estatico: 
+
+
+$z_{i} \sim Bernoulli (\psi_{i})$  Proceso Ecológico
+
+$y_{ij} \sim Bernoulli (z_{i} * p_{ij})$  Proceso de Observación
+
+con sitio i durante el muestreo j
+
+#### De forma Lineal 
+
+logit(Ψi) = α0 + α1xi1 + . . . + αUxiU.
+
+logit(pij) = β0 + β1xi1 + . . . + βUxiU + βU+1yij1 + . . . + βU+V yijV.
+
+
+### Modelo Dinámico
+
+$z_{it} \sim Bernoulli (\psi_{i,t})$  Proceso Ecológico
+
+$y_{ijt} \sim Bernoulli (z_{i} * p_{i,tj})$  Proceso de Observación
+
+con sitio i durante el muestreo j en el tiempo t (años)
+
+### Modelo Dinámico considerando colonización y extinción
+
+![image](C:/Users/usuario/Desktop/Curso_Salvador_Multi_Season/img/colext.png)
+
+
+
+$z_{it} \sim Bernoulli (z_{i,t-1\phi it } + (1-z_{i,t-1}) \gamma_{i,t})$  Proceso Ecológico
+
+$y_{ijt} \sim Bernoulli (z_{it} * p_{ijt})$  Proceso de Observación
+
+
+#### De forma Lineal
+
+logit(Ψi,1) = α0 + α1xi1 + . . . + αUxiU.
+
+Ψi,t|zi,t−1 = zi,t−1 × (1 −$\epsilon_{i}$,t−1) + (1 − zi,t−1) × $\gamma_{i}$,t−1, for t > 1.
+
+
+## La función Colext del paquete unmarked
+
+![image](C:/Users/usuario/Desktop/Curso_Salvador_Multi_Season/img/unmarked.png)
+
+
+# Información de la sesión en R.
+
+```{r sesion, results='markup'}
+print(sessionInfo(), locale = FALSE)
+```
